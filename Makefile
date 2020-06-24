@@ -1,0 +1,42 @@
+# smtp-js-http
+
+# Copyright (c) 2020 James Kinnaird
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+CXXFLAGS=--std=c++11 -Ithirdparty/concurrentqueue-1.0.1 -Ithirdparty/spdlog-1.6.1/include -Ithirdparty/tclap-1.2.2/include -Ithirdparty/duktape-2.5.0/src
+LIBS=`pkg-config --libs libsystemd`
+
+DEPS = smtp.hpp
+
+OBJDIR=obj
+_OBJ = smtp-js-http.o smtp.o
+OBJ = $(patsubst %,$(OBJDIR)/%,$(_OBJ))
+
+$(OBJDIR)/%.o: src/%.cpp src/$(DEPS)
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+smtp-js-http: $(OBJ)
+	mkdir -p obj
+	$(CXX) -o $@ $^ $(LIBS)
+
+.PHONY: clean
+
+clean:
+	rm -f $(OBJDIR)/*.o *~ smtp-js-http
