@@ -31,6 +31,7 @@
 #include <systemd/sd-daemon.h>
 #include <thread>
 
+#include "scriptvm.hpp"
 #include "smtp.hpp"
 
 #define DEFAULT_CONF_PATH       "/etc/smtp-js-http"
@@ -40,7 +41,7 @@
 #define DEFAULT_LOG_FILE        "syslog"
 #define DEFAULT_LOG_LEVEL       "info"
 
-std::atomic_bool  g_Running(false);
+std::atomic_bool g_Running(false);
 
 void signal_handler(int signo)
 {
@@ -59,6 +60,37 @@ void signal_handler(int signo)
         g_Running.store(false);
         
         break;
+    }
+}
+
+void ThreadProc(const std::string &scriptPath, const moodycamel::ConcurrentQueue<email> &queue)
+{
+    try
+    {
+        moodycamel::ConcurrentQueue<email> &mailqueue = const_cast<moodycamel::ConcurrentQueue<email> &>(queue);
+        ScriptVM *vm = new ScriptVM(scriptPath);
+
+        while (g_Running)
+        {
+            email mail;
+            if (mailqueue.try_dequeue(mail))
+            {
+                spdlog::debug("Processing email to {}", mail.to.front().c_str());
+            }
+            else
+                std::this_thread::yield();
+        }
+
+        delete vm;
+    }
+    catch (std::exception &e)
+    {
+        spdlog::warn("Exception in thread: {}", e.what());
+        g_Running.store(false);
+    }
+    catch (...)
+    {
+        g_Running.store(false);
     }
 }
 
@@ -113,8 +145,14 @@ int main(int argc, char **argv)
         else
             spdlog::set_level(spdlog::level::info);
 
-        if (daemon)
-            sd_notify(0, "READY=1");
+        spdlog::info("Starting smtp-js-http service");
+
+        // ensure that there is a trailing slash
+        std::string scriptPath(arg_script.getValue());
+        if (scriptPath.rfind('/') != 0)
+            scriptPath.append("/");
+
+        spdlog::info("Using script path: {}", scriptPath.c_str());
 
         moodycamel::ConcurrentQueue<email> mailqueue;
         SMTPServer smtp(mailqueue);
@@ -122,7 +160,13 @@ int main(int argc, char **argv)
         if (!smtp.Start(arg_bindaddr.getValue(), arg_port.getValue()))
             throw std::runtime_error("Unable to start SMTP server");
 
+        if (daemon)
+            sd_notify(0, "READY=1");
+
         g_Running.store(true);
+
+        // start the script thread
+        std::thread worker(ThreadProc, scriptPath, std::ref(mailqueue));
 
         // main loop
         while (g_Running)
@@ -133,25 +177,16 @@ int main(int argc, char **argv)
             if (daemon)
                 sd_notify(0, "WATCHDOG=1");
             
-            email mail;
-            if (mailqueue.try_dequeue(mail))
-            {
-                spdlog::debug("mail queued");
-                spdlog::debug("From: {}", mail.from.c_str());
-                for (std::vector<std::string>::iterator to = mail.to.begin();
-                    to != mail.to.end(); ++to)
-                    spdlog::debug("To: {}", (*to).c_str());
-
-                spdlog::debug("Data: {}", mail.data.c_str());
-            }
-
             std::this_thread::yield();
         }
 
         if (daemon)
             sd_notify(0, "STOPPING=1");
 
+        spdlog::info("Stopping smtp-js-http service");
+
         smtp.Stop();
+        worker.join();
     }
     catch (std::exception &e)
     {

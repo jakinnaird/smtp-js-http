@@ -20,51 +20,25 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#pragma once
+#include "scriptvm.hpp"
+#include "spdlog/spdlog.h"
 
-#include "concurrentqueue.h"
-
-#include <map>
-#include <string>
-#include <sys/types.h>
-#include <unistd.h>
-#include <vector>
-
-struct email
+static void my_fatal(void *udata, const char *msg)
 {
-    std::string from;
-    std::vector<std::string> to;
-    std::string data;
+    (void)udata;
+    throw std::runtime_error(msg);
+}
 
-    email(void) {}
-    email(const email &that)
-    {
-        from = that.from;
-        for (std::vector<std::string>::const_iterator i = that.to.begin();
-            i != that.to.end(); ++i)
-            to.push_back((*i));
-        data = that.data;
-    }
-};
-
-class SMTPConn;
-
-class SMTPServer
+ScriptVM::ScriptVM(const std::string &scriptPath)
+    : m_ScriptPath(scriptPath)
 {
-private:
-    moodycamel::ConcurrentQueue<email> &m_Queue;
-    std::map<int, SMTPConn*> m_Connections;
+    m_VM = duk_create_heap(nullptr, nullptr, nullptr, nullptr, my_fatal);
+    if (m_VM == nullptr)
+        throw std::runtime_error("Failed to create VM heap");
+}
 
-    int m_Listener;
-    fd_set m_Master;
-    int m_FdMax;
-
-public:
-    SMTPServer(moodycamel::ConcurrentQueue<email> &queue);
-    virtual ~SMTPServer(void);
-
-    bool Start(const std::string &addr, const std::string &port);
-    void Stop(void);
-
-    bool Update(void);
-};
+ScriptVM::~ScriptVM(void)
+{
+    if (m_VM)
+        duk_destroy_heap(m_VM);
+}

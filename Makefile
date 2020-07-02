@@ -20,21 +20,31 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-CXXFLAGS=--std=c++11 -Ithirdparty/concurrentqueue-1.0.1 -Ithirdparty/spdlog-1.6.1/include -Ithirdparty/tclap-1.2.2/include -Ithirdparty/duktape-2.5.0/src
-LIBS=`pkg-config --libs libsystemd`
+CXXFLAGS=--std=c++11 -DDUK_USE_CPP_EXCEPTIONS -Ithirdparty/concurrentqueue-1.0.1 -Ithirdparty/spdlog-1.6.1/include -Ithirdparty/tclap-1.2.2/include -Ithirdparty/duktape-2.5.0/src
+LIBS=`pkg-config --libs libsystemd` -lpthread
 
-DEPS = smtp.hpp
+DEPS = src/%.hpp
 
-OBJDIR=obj
-_OBJ = smtp-js-http.o smtp.o
+OBJDIR = obj
+_OBJ = smtp-js-http.o smtp.o scriptvm.o duktape.o
 OBJ = $(patsubst %,$(OBJDIR)/%,$(_OBJ))
 
-$(OBJDIR)/%.o: src/%.cpp src/$(DEPS)
+$(OBJDIR)/%.o: src/%.cpp $(DEPS)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 smtp-js-http: $(OBJ)
 	mkdir -p obj
 	$(CXX) -o $@ $^ $(LIBS)
+
+obj/smtp-js-http.o: src/smtp-js-http.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+obj/smtp.o: src/smtp.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+obj/scriptvm.o: src/scriptvm.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+obj/duktape.o: thirdparty/duktape-2.5.0/src/duktape.c
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 .PHONY: clean
 

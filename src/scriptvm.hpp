@@ -22,49 +22,18 @@
 
 #pragma once
 
-#include "concurrentqueue.h"
+#include "duktape.h"
 
-#include <map>
 #include <string>
-#include <sys/types.h>
-#include <unistd.h>
-#include <vector>
 
-struct email
-{
-    std::string from;
-    std::vector<std::string> to;
-    std::string data;
-
-    email(void) {}
-    email(const email &that)
-    {
-        from = that.from;
-        for (std::vector<std::string>::const_iterator i = that.to.begin();
-            i != that.to.end(); ++i)
-            to.push_back((*i));
-        data = that.data;
-    }
-};
-
-class SMTPConn;
-
-class SMTPServer
+class ScriptVM
 {
 private:
-    moodycamel::ConcurrentQueue<email> &m_Queue;
-    std::map<int, SMTPConn*> m_Connections;
+    std::string m_ScriptPath;
 
-    int m_Listener;
-    fd_set m_Master;
-    int m_FdMax;
+    duk_context *m_VM;
 
 public:
-    SMTPServer(moodycamel::ConcurrentQueue<email> &queue);
-    virtual ~SMTPServer(void);
-
-    bool Start(const std::string &addr, const std::string &port);
-    void Stop(void);
-
-    bool Update(void);
+    ScriptVM(const std::string &scriptPath);
+    virtual ~ScriptVM(void);
 };

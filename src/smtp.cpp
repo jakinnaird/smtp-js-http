@@ -214,6 +214,8 @@ public:
                         if (sendLine(m_Socket, "250 OK") == 6)
                             m_State = STATE_COMMANDS;
 
+                        spdlog::debug("SMTP server: Enqueuing mail from client {}", m_Socket);
+
                         // queue the message
                         m_Queue.enqueue(m_Mail);
 
@@ -225,6 +227,7 @@ public:
                     else
                     {
                         m_Mail.data.append(line);
+                        // m_Mail.data.append("\r\n"); // need to figure this out?
                         m_State = STATE_DATA;
                     }
                 }
