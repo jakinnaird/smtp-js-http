@@ -21,7 +21,11 @@
 // SOFTWARE.
 
 #include "scriptvm.hpp"
+#include "dukglue/dukglue.h"
 #include "spdlog/spdlog.h"
+#include "webrequest.hpp"
+
+#include <vector>
 
 static void my_fatal(void *udata, const char *msg)
 {
@@ -32,13 +36,37 @@ static void my_fatal(void *udata, const char *msg)
 ScriptVM::ScriptVM(const std::string &scriptPath)
     : m_ScriptPath(scriptPath)
 {
+    spdlog::debug("Creating javscript environment");
+
     m_VM = duk_create_heap(nullptr, nullptr, nullptr, nullptr, my_fatal);
     if (m_VM == nullptr)
         throw std::runtime_error("Failed to create VM heap");
+
+    // register all script classes
+    dukglue_register_constructor<WebRequest>(m_VM, "WebRequest");
+    dukglue_register_method(m_VM, &WebRequest::Test, "Test");
 }
 
 ScriptVM::~ScriptVM(void)
 {
     if (m_VM)
         duk_destroy_heap(m_VM);
+
+    spdlog::debug("Destroying javascript environment");
+}
+
+void ScriptVM::RunScript(const email &mail)
+{
+    for (std::vector<std::string>::const_iterator to = mail.to.begin();
+        to != mail.to.end(); ++to)
+    {
+        std::string::size_type _at = (*to).find('@');
+        if (_at == std::string::npos)
+            continue;   // invalid
+
+        std::string method = (*to).substr(0, _at);
+        std::string script = (*to).substr(_at + 1);
+
+        spdlog::debug("Calling method {} in file {}", method.c_str(), script.c_str());
+    }
 }

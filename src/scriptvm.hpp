@@ -24,6 +24,7 @@
 
 #include "duktape.h"
 
+#include "smtp.hpp"
 #include <string>
 
 class ScriptVM
@@ -36,4 +37,6 @@ private:
 public:
     ScriptVM(const std::string &scriptPath);
     virtual ~ScriptVM(void);
+
+    void RunScript(const email &mail);
 };

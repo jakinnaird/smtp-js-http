@@ -31,5 +31,7 @@
 *.out
 *.app
 
+.vscode/
+
 # Project specific
 smtp-js-http

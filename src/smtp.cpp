@@ -105,16 +105,20 @@ public:
     SMTPConn(int sock, moodycamel::ConcurrentQueue<email> &queue)
         : m_Socket(sock), m_Queue(queue)
     {
+        spdlog::debug("SMTPConn::SMTPConn()");
+
         m_State = STATE_CONNECTION;
     }
 
     ~SMTPConn(void)
     {
+        spdlog::debug("SMTPConn::~SMTPConn()");
     }
 
     int Update(void)
     {
         int result = -1;
+        spdlog::debug("SMTPConn::Update()");
 
         switch (m_State)
         {
@@ -198,9 +202,28 @@ public:
                     if (line.empty())
                         m_State = STATE_DATAEOM;
                     else
-                        m_Mail.data.append(line);
-                }
+                    {
+                        spdlog::debug("Processing line from client {}: {}", m_Socket, line.c_str());
 
+                        // process the line
+                        if (line.find("Date:") == 0)
+                            m_Mail.date.assign(line.substr(0, 6));
+                        else if (line.find("Subject:") == 0)
+                            m_Mail.subject.assign(line.substr(0, 9));
+                        else if (line.find("From:") == 0)
+                            ;   // we don't care
+                        else if (line.find("To:") == 0)
+                            ; // we don't care
+                        else
+                        {
+                            if (m_Mail.body.empty())
+                                m_Mail.body.assign(line);
+                            else
+                                m_Mail.body.append(line);
+                            m_Mail.body.append("\r\n");
+                        }
+                    }
+                }
             } break;
 
             case STATE_DATAEOM:
@@ -209,6 +232,8 @@ public:
                 result = readLine(m_Socket, line);
                 if (result > 0)
                 {
+                    spdlog::debug("Processing line for EOM: {}", line.c_str());
+
                     if (line.compare(".") == 0)
                     {
                         if (sendLine(m_Socket, "250 OK") == 6)
@@ -222,12 +247,14 @@ public:
                         // clear up the mail packet
                         m_Mail.from.clear();
                         m_Mail.to.clear();
-                        m_Mail.data.clear();
+                        m_Mail.date.clear();
+                        m_Mail.subject.clear();
+                        m_Mail.body.clear();
                     }
                     else
                     {
-                        m_Mail.data.append(line);
-                        // m_Mail.data.append("\r\n"); // need to figure this out?
+                        m_Mail.body.append(line);
+                        m_Mail.body.append("\r\n");
                         m_State = STATE_DATA;
                     }
                 }

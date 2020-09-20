@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "INIReader.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/syslog_sink.h"
@@ -27,6 +28,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <curl/curl.h>
 #include <signal.h>
 #include <systemd/sd-daemon.h>
 #include <thread>
@@ -34,7 +36,7 @@
 #include "scriptvm.hpp"
 #include "smtp.hpp"
 
-#define DEFAULT_CONF_PATH       "/etc/smtp-js-http"
+#define DEFAULT_CONF_PATH       "/etc/smtp-js-http/smtp-js-http.conf"
 #define DEFAULT_SMTP_ADDR       "127.0.0.1"
 #define DEFAULT_SMTP_PORT       "25"
 #define DEFAULT_SCRIPT_PATH     "/usr/share/smtp-js-http"
@@ -63,35 +65,41 @@ void signal_handler(int signo)
     }
 }
 
-void ThreadProc(const std::string &scriptPath, const moodycamel::ConcurrentQueue<email> &queue)
+void ThreadProc(const std::string &scriptPath, /*const*/ moodycamel::ConcurrentQueue<email> &queue)
 {
+    spdlog::debug("Processing thread started");
+
     try
     {
-        moodycamel::ConcurrentQueue<email> &mailqueue = const_cast<moodycamel::ConcurrentQueue<email> &>(queue);
-        ScriptVM *vm = new ScriptVM(scriptPath);
+        // moodycamel::ConcurrentQueue<email> &mailqueue = const_cast<moodycamel::ConcurrentQueue<email> &>(queue);
+        // ScriptVM *vm = new ScriptVM(scriptPath);
 
         while (g_Running)
         {
             email mail;
-            if (mailqueue.try_dequeue(mail))
+            if (/*mail*/queue.try_dequeue(mail))
             {
                 spdlog::debug("Processing email to {}", mail.to.front().c_str());
+                std::unique_ptr<ScriptVM> vm(new ScriptVM(scriptPath));
+                vm->RunScript(mail);
             }
             else
                 std::this_thread::yield();
         }
 
-        delete vm;
+        // delete vm;
     }
     catch (std::exception &e)
     {
-        spdlog::warn("Exception in thread: {}", e.what());
+        spdlog::error("Exception in thread: {}", e.what());
         g_Running.store(false);
     }
     catch (...)
     {
         g_Running.store(false);
     }
+
+    spdlog::debug("Processing thread stopped");
 }
 
 int main(int argc, char **argv)
@@ -117,38 +125,70 @@ int main(int argc, char **argv)
         args.add(arg_conf);
         args.parse(argc, argv);
 
-        daemon = arg_daemon.isSet();
+        // try to process the configuration file
+        std::string addr, port, spath, lpath, loglevel;
+        INIReader conf(arg_conf.getValue());
+        if (conf.ParseError() == 0)
+        {
+            daemon = (!arg_daemon.isSet() ? conf.GetBoolean("smtp-js-http", "daemon", arg_daemon.getValue()) :
+                arg_daemon.isSet());
+            addr = (!arg_bindaddr.isSet() ? conf.Get("smtp-js-http", "bind-addr", arg_bindaddr.getValue()) :
+                arg_bindaddr.getValue());
+            port = (!arg_port.isSet() ? conf.Get("smtp-js-http", "bind-port", arg_port.getValue()) :
+                arg_port.getValue());
+            spath = (!arg_script.isSet() ? conf.Get("smtp-js-http", "script-path", arg_script.getValue()) :
+                arg_script.getValue());
+            lpath = (!arg_logfile.isSet() ? conf.Get("smtp-js-http", "log-path", arg_logfile.getValue()) :
+                arg_logfile.getValue());
+            loglevel = (!arg_loglevel.isSet() ? conf.Get("smtp-js-http", "log-level", arg_loglevel.getValue()) :
+                arg_loglevel.getValue());
+        }
+        else
+        {
+            spdlog::debug("Configuration file {} is invalid, using defaults.",
+                arg_conf.getValue());
+
+            daemon = arg_daemon.isSet();
+            addr = arg_bindaddr.getValue();
+            port = arg_port.getValue();
+            spath = arg_script.getValue();
+            lpath = arg_logfile.getValue();
+            loglevel = arg_loglevel.getValue();
+        }
 
         // configure the logger
-        if (arg_logfile.getValue().compare("syslog") == 0)
+        if (lpath.compare("syslog") == 0)
             spdlog::set_default_logger(spdlog::syslog_logger_mt("syslog", "smtp-js-http", LOG_PID));
-        else if (arg_logfile.getValue().compare("stdout") == 0)
+        else if (lpath.compare("stdout") == 0)
             ; // nothing to do
         else
-            spdlog::set_default_logger(spdlog::basic_logger_mt("smtp-js-http", arg_logfile.getValue()));
+            spdlog::set_default_logger(spdlog::basic_logger_mt("smtp-js-http", lpath));
+
+        spdlog::flush_every(std::chrono::seconds(3));
 
         // register our signal handlers
         if (signal(SIGTERM, signal_handler) == SIG_ERR ||
             signal(SIGINT, signal_handler) == SIG_ERR)
             throw std::runtime_error("Failed to install signal handler");
 
-        if (arg_loglevel.getValue().compare("none") == 0)
+        if (loglevel.compare("none") == 0)
             spdlog::set_level(spdlog::level::off);
-        else if (arg_loglevel.getValue().compare("critical") == 0)
+        else if (loglevel.compare("critical") == 0)
             spdlog::set_level(spdlog::level::critical);
-        else if (arg_loglevel.getValue().compare("error") == 0)
+        else if (loglevel.compare("error") == 0)
             spdlog::set_level(spdlog::level::err);
-        else if (arg_loglevel.getValue().compare("warn") == 0)
+        else if (loglevel.compare("warn") == 0)
             spdlog::set_level(spdlog::level::warn);
-        else if (arg_loglevel.getValue().compare("debug") == 0)
+        else if (loglevel.compare("debug") == 0)
             spdlog::set_level(spdlog::level::debug);
         else
+
             spdlog::set_level(spdlog::level::info);
 
         spdlog::info("Starting smtp-js-http service");
 
         // ensure that there is a trailing slash
-        std::string scriptPath(arg_script.getValue());
+        std::string scriptPath(spath);
         if (scriptPath.rfind('/') != 0)
             scriptPath.append("/");
 
@@ -157,7 +197,10 @@ int main(int argc, char **argv)
         moodycamel::ConcurrentQueue<email> mailqueue;
         SMTPServer smtp(mailqueue);
 
-        if (!smtp.Start(arg_bindaddr.getValue(), arg_port.getValue()))
+        if (curl_global_init(CURL_GLOBAL_ALL) != 0)
+            throw std::runtime_error("Unable to initialize cURL library");
+
+        if (!smtp.Start(addr, port))
             throw std::runtime_error("Unable to start SMTP server");
 
         if (daemon)
@@ -167,6 +210,14 @@ int main(int argc, char **argv)
 
         // start the script thread
         std::thread worker(ThreadProc, scriptPath, std::ref(mailqueue));
+
+        email _testmail;
+        _testmail.from = "james@test";
+        _testmail.to.push_back("main@test.js");
+        _testmail.date = "today";
+        _testmail.subject = "Hello world";
+        _testmail.body = "This is a test";
+        mailqueue.enqueue(_testmail);
 
         // main loop
         while (g_Running)
@@ -187,6 +238,8 @@ int main(int argc, char **argv)
 
         smtp.Stop();
         worker.join();
+
+        curl_global_cleanup();
     }
     catch (std::exception &e)
     {

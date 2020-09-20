@@ -20,55 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#pragma once
+#include "webrequest.hpp"
+#include <iostream>
 
-#include "concurrentqueue.h"
-
-#include <map>
-#include <string>
-#include <sys/types.h>
-#include <unistd.h>
-#include <vector>
-
-struct email
+WebRequest::WebRequest(void)
 {
-    std::string from;
-    std::vector<std::string> to;
-    std::string date;
-    std::string subject;
-    std::string body;
+}
 
-    email(void) {}
-    email(const email &that)
-    {
-        from = that.from;
-        for (std::vector<std::string>::const_iterator i = that.to.begin();
-            i != that.to.end(); ++i)
-            to.push_back((*i));
-        date = that.date;
-        subject = that.subject;
-        body = that.body;
-    }
-};
-
-class SMTPConn;
-
-class SMTPServer
+WebRequest::~WebRequest(void)
 {
-private:
-    moodycamel::ConcurrentQueue<email> &m_Queue;
-    std::map<int, SMTPConn*> m_Connections;
+}
 
-    int m_Listener;
-    fd_set m_Master;
-    int m_FdMax;
-
-public:
-    SMTPServer(moodycamel::ConcurrentQueue<email> &queue);
-    virtual ~SMTPServer(void);
-
-    bool Start(const std::string &addr, const std::string &port);
-    void Stop(void);
-
-    bool Update(void);
-};
+void WebRequest::Test(void)
+{
+    std::cout << "WebRequest::Test()" << std::endl;
+}

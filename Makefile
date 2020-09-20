@@ -20,13 +20,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-CXXFLAGS=--std=c++11 -DDUK_USE_CPP_EXCEPTIONS -Ithirdparty/concurrentqueue-1.0.1 -Ithirdparty/spdlog-1.6.1/include -Ithirdparty/tclap-1.2.2/include -Ithirdparty/duktape-2.5.0/src
-LIBS=`pkg-config --libs libsystemd` -lpthread
+CXXFLAGS=--std=c++11 -DDUK_USE_CPP_EXCEPTIONS -Ithirdparty/concurrentqueue-1.0.1 -Ithirdparty/spdlog-1.6.1/include -Ithirdparty/tclap-1.2.2/include -Ithirdparty/duktape-2.5.0/src -Ithirdparty/inih-r51 -Ithirdparty/inih-r51/cpp -Ithirdparty/dukglue-master/include
+LIBS=`pkg-config --libs libsystemd` -lpthread `pkg-config --libs libcurl`
 
 DEPS = src/%.hpp
 
 OBJDIR = obj
-_OBJ = smtp-js-http.o smtp.o scriptvm.o duktape.o
+_OBJ = smtp-js-http.o smtp.o scriptvm.o webrequest.o duktape.o ini.o inireader.o
 OBJ = $(patsubst %,$(OBJDIR)/%,$(_OBJ))
 
 $(OBJDIR)/%.o: src/%.cpp $(DEPS)
@@ -42,8 +42,15 @@ obj/smtp.o: src/smtp.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 obj/scriptvm.o: src/scriptvm.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+obj/webrequest.o: src/webrequest.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 obj/duktape.o: thirdparty/duktape-2.5.0/src/duktape.c
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+obj/ini.o: thirdparty/inih-r51/ini.c
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+obj/inireader.o: thirdparty/inih-r51/cpp/INIReader.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 .PHONY: clean
