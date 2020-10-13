@@ -149,7 +149,7 @@ public:
 
                         // currently we don't support any options
                         std::ostringstream oss;
-                        oss << "250-smtp-js-http greets " << m_Client;
+                        oss << "250 smtp-js-http greets " << m_Client;
                         result = sendLine(m_Socket, oss.str());
                         if (result == oss.str().length())
                             m_State = STATE_COMMANDS;
@@ -206,9 +206,9 @@ public:
 
                         // process the line
                         if (line.find("Date:") == 0)
-                            m_Mail.date.assign(line.substr(0, 6));
+                            m_Mail.date.assign(line.substr(6));
                         else if (line.find("Subject:") == 0)
-                            m_Mail.subject.assign(line.substr(0, 9));
+                            m_Mail.subject.assign(line.substr(9));
                         else if (line.find("From:") == 0)
                             ;   // we don't care
                         else if (line.find("To:") == 0)
@@ -219,7 +219,9 @@ public:
                                 m_Mail.body.assign(line);
                             else
                                 m_Mail.body.append(line);
-                            m_Mail.body.append("\r\n");
+
+                            // if (line.length() > 0)
+                            //     m_Mail.body.append("\r\n");
                         }
                     }
                 }

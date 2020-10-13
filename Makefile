@@ -57,3 +57,10 @@ obj/inireader.o: thirdparty/inih-r51/cpp/INIReader.cpp
 
 clean:
 	rm -f $(OBJDIR)/*.o *~ smtp-js-http
+
+install:
+	cp smtp-js-http /usr/local/sbin
+	cp etc/smtp-js-http.service /lib/systemd/system && chmod 644 /lib/systemd/system/smtp-js-http.service
+	mkdir -p /etc/smtp-js-http && cp etc/smtp-js-http.conf /etc/smtp-js-http/smtp-js-http.conf
+	mkdir -p /usr/share/smtp-js-http && cp scripts/*.js /usr/share/smtp-js-http
+	systemctl enable smtp-js-http.service && systemctl start smtp-js-http.service

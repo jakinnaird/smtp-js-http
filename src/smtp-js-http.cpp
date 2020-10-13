@@ -81,7 +81,8 @@ void ThreadProc(const std::string &scriptPath, moodycamel::ConcurrentQueue<email
                 vm->RunScript(mail);
             }
             else
-                std::this_thread::yield();
+                //std::this_thread::yield();
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
     catch (std::exception &e)

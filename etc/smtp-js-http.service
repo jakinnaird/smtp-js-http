@@ -1,0 +1,12 @@
+[Unit]
+Description=Simple SMTP to HTTP translation with JavaScript processing
+After=network.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/sbin/smtp-js-http --daemon --conf /etc/smtp-js-http/smtp-js-http.conf
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias=smtp-js-http.service

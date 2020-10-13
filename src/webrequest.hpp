@@ -23,12 +23,33 @@
 #pragma once
 
 #include <curl/curl.h>
+#include <string>
 
 class WebRequest
 {
+private:
+    CURL *m_Curl;
+    char m_errorBuf[CURL_ERROR_SIZE * 2];
+
+    std::string m_PostData;
+    std::string m_Error;
+    std::string m_Result;
+
+    struct curl_slist *m_Headers;
+
 public:
     WebRequest(void);
     ~WebRequest(void);
 
-    void Test(void);
+    void Header(const std::string &name, const std::string &value);
+    void PostData(const std::string &data);
+
+    int32_t Get(const std::string &url);
+    int32_t Post(const std::string &url);
+
+    std::string Result(void) const { return m_Result; }
+    std::string Error(void) const { return m_Error; }
+
+private:
+    int32_t Perform(const std::string &url);
 };
