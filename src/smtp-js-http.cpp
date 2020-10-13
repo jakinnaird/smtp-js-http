@@ -38,7 +38,7 @@
 
 #define DEFAULT_CONF_PATH       "/etc/smtp-js-http/smtp-js-http.conf"
 #define DEFAULT_SMTP_ADDR       "127.0.0.1"
-#define DEFAULT_SMTP_PORT       "25"
+#define DEFAULT_SMTP_PORT       "2025"
 #define DEFAULT_SCRIPT_PATH     "/usr/share/smtp-js-http"
 #define DEFAULT_LOG_FILE        "syslog"
 #define DEFAULT_LOG_LEVEL       "info"
@@ -65,19 +65,16 @@ void signal_handler(int signo)
     }
 }
 
-void ThreadProc(const std::string &scriptPath, /*const*/ moodycamel::ConcurrentQueue<email> &queue)
+void ThreadProc(const std::string &scriptPath, moodycamel::ConcurrentQueue<email> &queue)
 {
     spdlog::debug("Processing thread started");
 
     try
     {
-        // moodycamel::ConcurrentQueue<email> &mailqueue = const_cast<moodycamel::ConcurrentQueue<email> &>(queue);
-        // ScriptVM *vm = new ScriptVM(scriptPath);
-
         while (g_Running)
         {
             email mail;
-            if (/*mail*/queue.try_dequeue(mail))
+            if (queue.try_dequeue(mail))
             {
                 spdlog::debug("Processing email to {}", mail.to.front().c_str());
                 std::unique_ptr<ScriptVM> vm(new ScriptVM(scriptPath));
@@ -86,8 +83,6 @@ void ThreadProc(const std::string &scriptPath, /*const*/ moodycamel::ConcurrentQ
             else
                 std::this_thread::yield();
         }
-
-        // delete vm;
     }
     catch (std::exception &e)
     {
@@ -210,14 +205,6 @@ int main(int argc, char **argv)
 
         // start the script thread
         std::thread worker(ThreadProc, scriptPath, std::ref(mailqueue));
-
-        email _testmail;
-        _testmail.from = "james@test";
-        _testmail.to.push_back("main@test.js");
-        _testmail.date = "today";
-        _testmail.subject = "Hello world";
-        _testmail.body = "This is a test";
-        mailqueue.enqueue(_testmail);
 
         // main loop
         while (g_Running)

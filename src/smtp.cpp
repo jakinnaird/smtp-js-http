@@ -105,20 +105,19 @@ public:
     SMTPConn(int sock, moodycamel::ConcurrentQueue<email> &queue)
         : m_Socket(sock), m_Queue(queue)
     {
-        spdlog::debug("SMTPConn::SMTPConn()");
+        spdlog::debug("Creating new SMTP connection for socket {}", m_Socket);
 
         m_State = STATE_CONNECTION;
     }
 
     ~SMTPConn(void)
     {
-        spdlog::debug("SMTPConn::~SMTPConn()");
+        spdlog::debug("Destroying SMTP connection for socket {}", m_Socket);
     }
 
     int Update(void)
     {
         int result = -1;
-        spdlog::debug("SMTPConn::Update()");
 
         switch (m_State)
         {
@@ -199,7 +198,7 @@ public:
                 result = readLine(m_Socket, line);
                 if (result > 0)
                 {
-                    if (line.empty())
+                    if (line.empty() || line.compare("\\r\\n") == 0)
                         m_State = STATE_DATAEOM;
                     else
                     {
